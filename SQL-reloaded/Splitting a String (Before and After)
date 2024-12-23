@@ -1,0 +1,117 @@
+/*
+SQL Reloaded: Splitting a String (Before and After)
+https://sql-troubles.blogspot.com/2020/05/before-and-after-splitting-string.html
+*/
+
+-- splitting a string (SQL Server 2016+)
+SELECT *
+FROM STRING_SPLIT('100001::M:black:', ':') 
+
+-- split table-valued function with an index
+CREATE FUNCTION test.[SplitListWithIndex]( 
+  @ListValues varchar(500) 
+, @Delimiter char(1)) 
+RETURNS @Temp TABLE(
+  Ind int
+, Value varchar(50)) 
+AS 
+BEGIN 
+ DECLARE @Index int 
+ DECLARE @Length int 
+ DECLARE @Ind int 
+
+ SET @Index = CharIndex(@Delimiter, @ListValues) 
+ SET @Length = Len(@ListValues) - @Index 
+ SET @Ind = 1
+   
+ WHILE @Index > 0 --if the fatch was successful
+ BEGIN 
+  INSERT @Temp 
+  VALUES(@Ind, Substring(@ListValues, 0, @Index)) 
+
+  SET @ListValues = Substring(@ListValues, @Index+1, @Length) 
+  SET @Index = CharIndex(@Delimiter, @ListValues) 
+  SET @Length = @Length - @Index 
+  SET @Ind = @Ind + 1
+ END  
+   
+ INSERT @Temp 
+ VALUES(@Ind, @ListValues) 
+RETURN 
+END  
+GO
+
+-- splitting a string (SQL Server 2000+)
+SELECT *
+FROM test.SplitListWithIndex('100001::M:black:', ':')
+
+
+-- parsing delimited values (SQL Server 2000+)
+SELECT DAT.ProductNumber
+, Max(CASE WHEN LV.Ind = 1 THEN LV.Value END) ItemId
+, Max(CASE WHEN LV.Ind = 2 THEN LV.Value END) Configid
+, Max(CASE WHEN LV.Ind = 3 THEN LV.Value END) InventSizeId
+, Max(CASE WHEN LV.Ind = 4 THEN LV.Value END) InventColorId
+, Max(CASE WHEN LV.Ind = 5 THEN LV.Value END) StyleId
+FROM ( VALUES ('100001::S:black:')
+ , ('100001::M:black:')
+ , ('100001::L:black:')
+ , ('100001::XL:black:')
+ , ('100001::S:white:')
+ , ('100001::M:white:')
+ , ('100001::L:white:')
+ , ('100001::XL:white:')
+) DAT (ProductNumber)
+CROSS APPLY test.SplitListWithIndex(DAT.ProductNumber, ':') LV
+GROUP BY DAT.ProductNumber
+ORDER BY DAT.ProductNumber
+
+
+-- parsing delimited values (SQL Server 2016+)
+SELECT LV.ProductNumber
+, Max(CASE WHEN LV.Ind = 1 THEN LV.Value END) ItemId
+, Max(CASE WHEN LV.Ind = 2 THEN LV.Value END) Configid
+, Max(CASE WHEN LV.Ind = 3 THEN LV.Value END) InventSizeId
+, Max(CASE WHEN LV.Ind = 4 THEN LV.Value END) InventColorId
+, Max(CASE WHEN LV.Ind = 5 THEN LV.Value END) StyleId
+FROM (
+ SELECT DAT.ProductNumber
+ , XT.VALUE
+ , ROW_NUMBER() OVER (PARTITION BY DAT.ProductNumber ORDER BY DAT.ProductNumber) Ind
+ FROM ( VALUES ('100001::S:black:')
+  , ('100001::M:black:')
+  , ('100001::L:black:')
+  , ('100001::XL:black:')
+  , ('100001::S:white:')
+  , ('100001::M:white:')
+  , ('100001::L:white:')
+  , ('100001::XL:white:')
+ ) DAT (ProductNumber)
+ CROSS APPLY STRING_SPLIT(DAT.ProductNumber, ':') XT
+) LV
+GROUP BY LV.ProductNumber
+ORDER BY LV.ProductNumber
+
+-- parsing delimited values (SQL Server 2016+)
+SELECT P.ProductNumber
+, Cast(Trim([1]) as nvarchar(20)) ItemId
+, Cast(Trim([2]) as nvarchar(20)) ConfigId
+, Cast(Trim([3]) as nvarchar(20)) InventSizeid
+, Cast(Trim([4]) as nvarchar(20)) InventColorId
+, Cast(Trim([5]) as nvarchar(20)) StyleId
+FROM (
+ SELECT DAT.ProductNumber
+ , XT.VALUE
+ , ROW_NUMBER() OVER (PARTITION BY DAT.ProductNumber ORDER BY DAT.ProductNumber) Ranking
+ FROM ( VALUES ('100001::S:black:')
+  , ('100001::M:black:')
+  , ('100001::L:black:')
+  , ('100001::XL:black:')
+  , ('100001::S:white:')
+  , ('100001::M:white:')
+  , ('100001::L:white:')
+  , ('100001::XL:white:')
+ ) DAT (ProductNumber)
+ CROSS APPLY STRING_SPLIT(DAT.ProductNumber, ':') XT
+) DAT
+PIVOT (MAX(DAT.[VALUE]) FOR DAT.Ranking IN ([1],[2],[3],[4],[5])) P
