@@ -1,0 +1,158 @@
+-- reviewing the data (not in original post)
+SELECT top 100 *
+FROM SalesLT.SalesOrderDetail SOL
+
+-- aggregated sales orders - detailed (SQL Server 2000+)
+SELECT SOL.ProductID
+, Year(SOH.OrderDate) [Year]
+, Month(SOH.OrderDate) [Month]
+, SUM(SOL.OrderQty) TotalQty
+, AVG(SOL.OrderQty) AverageQty
+FROM SalesLT.SalesOrderDetail SOL
+     JOIN SalesLT.SalesOrderHeader SOH
+	   ON SOL.SalesOrderID = SOH.SalesOrderID
+WHERE SOL.ProductID IN (976)
+  --AND Year(SOH.OrderDate) = 2012
+  --AND Month(SOH.OrderDate) BETWEEN 1 AND 3
+GROUP BY SOL.ProductID
+, Year(SOH.OrderDate) 
+, Month(SOH.OrderDate)
+
+-- encapsulating the logic into a view (SQL Server 2000+)
+CREATE OR ALTER VIEW SalesLT.vSalesOrders
+AS
+-- sales orders details
+SELECT SOL.SalesOrderID 
+, SOL.ProductID
+, Cast(SOH.OrderDate as Date) OrderDate
+, Year(SOH.OrderDate) [Year]
+, Month(SOH.OrderDate) [Month]
+, Cast(SOL.OrderQty as decimal(18,2)) OrderQty
+-- many more columns 
+FROM SalesLT.SalesOrderDetail SOL
+     JOIN SalesLT.SalesOrderHeader SOH
+	   ON SOL.SalesOrderID = SOH.SalesOrderID
+
+  SELECT top 100 *
+  FROM SalesLT.vSalesOrders
+
+-- aggregated sales orders - simplified (SQL Server 2000+)
+SELECT SOL.ProductID
+, SOL.[Year]
+, SOL.[Month]
+, SUM(SOL.OrderQty) TotalQty
+, AVG(SOL.OrderQty) AverageQty
+FROM SalesLT.vSalesOrders SOL
+WHERE SOL.ProductID IN (976)
+  --AND SOL.[Year] = 2012
+  --AND SOL.[Month] BETWEEN 1 AND 3
+GROUP BY SOL.ProductID
+, SOL.[Year]
+, SOL.[Month]
+
+-- sales orders from the totals (SQL Server 2000+)
+SELECT SOL.*
+, ASO.TotalQty
+, Cast(CASE WHEN ASO.TotalQty <> 0 THEN 100*SOL.OrderQty/ASO.TotalQty ELSE 0 END as decimal(18,2)) OrderQtyPct
+, ASO.AverageQty
+FROM SalesLT.vSalesOrders SOL
+     JOIN ( -- aggregated sales orders
+		SELECT SOL.ProductID
+		, SOL.[Year]
+		, SOL.[Month]
+		, SUM(SOL.OrderQty) TotalQty
+		, AVG(SOL.OrderQty) AverageQty
+		FROM SalesLT.vSalesOrders SOL
+		WHERE SOL.ProductID IN (976)
+		  --AND SOL.[Year] = 2012
+		  --AND SOL.[Month] BETWEEN 1 AND 3
+		GROUP BY SOL.ProductID
+		, SOL.[Year]
+		, SOL.[Month]
+	) ASO
+	ON SOL.ProductID = ASO.ProductID 
+   AND SOL.[Year] = ASO.[Year]
+   AND SOL.[Month] = ASO.[Month]
+ORDER BY SOL.ProductID
+, SOL.OrderDate
+
+-- sales orders with CTE SQL Server 2005+ query 
+WITH CTE
+AS (--sales orders in scope
+SELECT SOL.SalesOrderID 
+, SOL.ProductID
+, Cast(SOH.OrderDate as Date) OrderDate
+, Year(SOH.OrderDate) [Year]
+, Month(SOH.OrderDate) [Month]
+, SOL.OrderQty
+FROM SalesLT.SalesOrderDetail SOL
+     JOIN SalesLT.SalesOrderHeader SOH
+	   ON SOL.SalesOrderID = SOH.SalesOrderID
+WHERE SOL.ProductID IN (976)
+  --AND Year(SOH.OrderDate) = 2012
+  --AND Month(SOH.OrderDate) BETWEEN 1 AND 3
+)
+SELECT SOL.SalesOrderID 
+, SOL.ProductID
+, SOL. OrderDate
+, SOL.[Year]
+, SOL.[Month]
+, SOL.OrderQty
+, SUM(SOL.OrderQty) OVER(PARTITION BY SOL.[Year], SOL.[Month]) TotalQty
+, AVG(SOL.OrderQty)  OVER(PARTITION BY SOL.[Year], SOL.[Month]) AverageQty
+FROM CTE SOL
+-- WHERE SOL.ProductID IN (976)
+  --AND SOL.[Year] = 2012
+  --AND SOL.[Month] BETWEEN 1 AND 3
+
+-- aggregated sales orders (SQL Server 2005+)
+SELECT SOL.SalesOrderID 
+, SOL.ProductID
+, SOL. OrderDate
+, SOL.[Year]
+, SOL.[Month]
+, SOL.OrderQty
+, SUM(SOL.OrderQty) OVER(PARTITION BY SOL.[Year], SOL.[Month]) TotalQty
+, AVG(SOL.OrderQty)  OVER(PARTITION BY SOL.[Year], SOL.[Month]) AverageQty
+, Cast(CASE WHEN SUM(SOL.OrderQty) OVER(PARTITION BY SOL.[Year], SOL.[Month]) <> 0 THEN 100*SOL.OrderQty/SUM(SOL.OrderQty) OVER(PARTITION BY SOL.[Year], SOL.[Month]) ELSE 0 END as decimal(18,2)) OrderQtyPct
+FROM SalesLT.vSalesOrders SOL
+WHERE SOL.ProductID IN (976)
+  --AND SOL.[Year] = 2012
+  --AND SOL.[Month] BETWEEN 1 AND 3
+
+
+-- Aggregations per month (SQL Server 2022+)
+SELECT SOL.SalesOrderID 
+, SOL.ProductID
+, SOL.OrderDate
+, SOL.[Year]
+, SOL.[Month]
+, SOL.OrderQty
+, SUM(SOL.OrderQty) OVER SalesByMonth AS TotalQty
+, AVG(SOL.OrderQty) OVER SalesByMonth AS AverageQty
+, Cast(CASE WHEN SUM(SOL.OrderQty) OVER SalesByMonth <> 0 THEN 100*SOL.OrderQty/SUM(SOL.OrderQty) OVER SalesByMonth ELSE 0 END as decimal(18,2)) OrderQtyPct
+FROM SalesLT.vSalesOrders SOL
+WHERE SOL.ProductID IN (976)
+  --AND SOL.[Year] = 2012
+  --AND SOL.[Month] BETWEEN 1 AND 3
+WINDOW SalesByMonth AS (PARTITION BY SOL.[Year], SOL.[Month])
+
+-- Aggregations per month and year (SQL Server 2022+) 
+SELECT SOL.SalesOrderID 
+, SOL.ProductID
+, SOL.OrderDate
+, SOL.[Year]
+, SOL.[Month]
+, SOL.OrderQty
+, SUM(SOL.OrderQty) OVER SalesByMonth AS TotalQtyByMonth
+, AVG(SOL.OrderQty) OVER SalesByMonth AS AverageQtyByMonth
+, Cast(CASE WHEN SUM(SOL.OrderQty) OVER SalesByMonth <> 0 THEN 100*SOL.OrderQty/SUM(SOL.OrderQty) OVER SalesByMonth ELSE 0 END as decimal(18,2)) OrderQtyPctByMonth
+, SUM(SOL.OrderQty) OVER SalesByYear AS TotalQtyByYear
+, AVG(SOL.OrderQty) OVER SalesByYear AS AverageQtyByYear
+, Cast(CASE WHEN SUM(SOL.OrderQty) OVER SalesByYear <> 0 THEN 100*SOL.OrderQty/SUM(SOL.OrderQty) OVER SalesByYear ELSE 0 END as decimal(18,2)) OrderQtyPctByYear
+FROM SalesLT.vSalesOrders SOL
+WHERE SOL.ProductID IN (976)
+  --AND SOL.[Year] = 2012
+  --AND SOL.[Month] BETWEEN 1 AND 3
+WINDOW SalesByMonth AS (PARTITION BY SOL.[Year], SOL.[Month])
+, SalesByYear AS  (PARTITION BY SOL.[Year])
