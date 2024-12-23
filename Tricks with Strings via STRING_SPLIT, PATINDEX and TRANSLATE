@@ -1,0 +1,63 @@
+/*
+SQL Reloaded: Tricks with Strings via STRING_SPLIT,  PATINDEX and TRANSLATE
+https://sql-troubles.blogspot.com/2022/11/sql-reloaded-tricks-with-strings-via.html
+*/
+
+-- searching for several words via LIKE (SQL Server 2000+)
+SELECT * 
+FROM SalesLT.Product 
+WHERE Name LIKE '%Long%'
+   OR Name LIKE '%Fork%'
+   OR Name LIKE '%Chain%'
+   OR Name LIKE '%Rear%'
+
+
+
+-- searching for a value via PATINDEX (SQL Server 2000+)
+SELECT * 
+FROM SalesLT.[Product] 
+WHERE PATINDEX('%Long%', Name)>0
+
+-- filtering for several words via PATHINDEX (SQL Server 2008+)
+WITH CTE 
+AS (
+  -- table from list of values (SQL Server 2008+)
+  SELECT *
+  FROM (VALUES ('Long')
+  , ('Fork')
+  , ('Chain')
+  , ('Rear')) DAT(words)
+) 
+SELECT * 
+FROM SalesLT.Product PRD
+WHERE EXISTS (
+	SELECT *
+	FROM CTE
+	WHERE PATINDEX('%'+ CTE.words +'%', PRD.Name)>0
+	)
+
+-- filtering for several words via PATHINDEX & STRING_SPLIT (SQL Server 2017+)
+SELECT * 
+FROM SalesLT.Product PRD
+WHERE EXISTS (
+	SELECT *
+	FROM STRING_SPLIT('Long|Fork|Chain|Rear', '|') SPL
+	WHERE PATINDEX('%'+ SPL.value +'%', PRD.Name)>0
+	)
+
+-- listing the words appearing in a column (SQL Server 2017+)
+SELECT DISTINCT SPL.value
+FROM SalesLT.Product PRD
+     CROSS APPLY STRING_SPLIT(Name, ' ') SPL
+ORDER BY SPL.value
+
+-- replacing special characters via TRANSLATE (SQL Server 2017+)
+SELECT TRANSLATE(Name, '-,/''', Replicate(' ', 4))
+FROM SalesLT.Product PRD
+
+SELECT DISTINCT SPL.value
+FROM SalesLT.Product PRD
+     CROSS APPLY STRING_SPLIT(TRANSLATE(Name, '-,/''', Replicate(' ', 4)), ' ') SPL
+WHERE IsNumeric(SPL.value) = 0 -- removing numbers
+  AND Len(SPL.value)>2 -- removing single/double letters
+ORDER BY SPL.value
