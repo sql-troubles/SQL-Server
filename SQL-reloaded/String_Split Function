@@ -1,0 +1,47 @@
+/*
+SQL Reloaded: String_Split Function
+https://sql-troubles.blogspot.com/2018/10/hero-of-day-stringsplit.html
+*/
+
+-- cleaning up
+-- DROP TABLE test.ItemList
+
+-- test data 
+SELECT A.*
+INTO test.ItemList 
+FROM (
+VALUES (1, '1001:a:blue')
+, (2, '1001:b:white')
+, (3, '1002:a:blue')
+, (4, '1002:b:white')
+, (5, '1002:c:red')
+, (6, '1003:b:white')
+, (7, '1003:c:red')) A(Id, List)
+
+-- checking the data
+SELECT *
+FROM test.ItemList 
+
+-- prepared data
+SELECT ITM.Id 
+, ITM.List 
+, DAT.ItemId
+, DAT.Size
+, DAT.Country
+FROM test.ItemList ITM
+   LEFT JOIN (-- transformed data 
+ SELECT DAT.id
+ , [1] AS ItemId
+ , [2] AS Size
+ , [3] AS Country
+ FROM(
+  SELECT ITM.id
+  , TX.Value
+  , ROW_NUMBER() OVER (PARTITION BY ITM.id ORDER BY ITM.id) Ranking
+  FROM test.ItemList ITM
+  CROSS APPLY STRING_SPLIT(ITM.List, ':') TX
+  ) DAT
+ PIVOT (MAX(DAT.Value) FOR DAT.Ranking IN ([1],[2],[3])) 
+ DAT
+  ) DAT
+   ON ITM.Id = DAT.Id 
