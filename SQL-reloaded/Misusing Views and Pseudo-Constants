@@ -1,0 +1,119 @@
+/*
+SQL Reloaded: Misusing Views and Pseudo-Constants
+https://sql-troubles.blogspot.com/2018/02/misusing-views-and-pseudo-constants.html
+*/
+
+-- parameters for a BI solution
+CREATE VIEW test.vLoV_Parameters
+AS
+SELECT Cast('ABC' as nvarchar(20)) AS DataAreaId
+ , Cast(GetDate() as Date) AS CurrentDate 
+ , Cast(100 as int) AS BatchCount 
+GO
+
+SELECT *
+FROM test.vLoV_Parameters
+GO
+
+-- values for a dropdown 
+ CREATE VIEW test.vLoV_DataAreas
+ AS
+ SELECT Cast('ABC' as nvarchar(20)) AS DataAreaId
+ , Cast('Company ABC' as nvarchar(50)) AS Description 
+ UNION ALL
+ SELECT 'XYZ' DataAreaId 
+ , 'Company XYZ'
+GO
+
+SELECT *
+FROM test.vLoV_DataAreas
+GO
+
+-- Status Issue Enumeration 
+ CREATE VIEW test.vLoV_StatusIssue
+ AS
+ SELECT cast(0 as int) AS None
+ , cast(1 as int) AS Sold
+ , cast(2 as int) AS Deducted
+ , cast(3 as int) AS Picked
+ , cast(4 as int) AS ReservPhysical
+ , cast(5 as int) AS ReservOrdered
+ , cast(6 as int) AS OnOrder
+ , cast(7 as int) AS QuotationIssue
+GO
+
+-- Status Receipt Enumeration 
+ CREATE VIEW test.vLoV_StatusReceipt
+ AS
+SELECT cast(0 as int) AS None
+ , cast(1 as int) AS Purchased
+ , cast(2 as int) AS Received
+ , cast(3 as int) AS Registered
+ , cast(4 as int) AS Arrived
+ , cast(5 as int) AS Ordered
+ , cast(6 as int) AS QuotationReceipt
+GO
+
+-- Inventory Direction Enumeration 
+ CREATE VIEW test.vLoV_InventDirection
+ AS
+ SELECT cast(0 as int) AS None
+ , cast(1 as int) AS Receipt
+ , cast(2 as int) AS Issue
+GO
+
+-- creating an ad-hoc table  
+ SELECT *
+ INTO test.InventTrans
+ FROM (VALUES (1, 1, 0, 2, -1, 'A0001')
+ , (2, 1, 0, 2, -10, 'A0002')
+ , (3, 2, 0, 2, -6, 'A0001')
+ , (4, 2, 0, 2, -3, 'A0002')
+ , (5, 3, 0, 2, -2, 'A0001')
+ , (6, 1, 0, 1, 1, 'A0001')
+ , (7, 0, 1, 1, 50, 'A0001')
+ , (8, 0, 2, 1, 100, 'A0002')
+ , (9, 0, 3, 1, 30, 'A0003')
+ , (10, 0, 3, 1, 20, 'A0004')
+ , (11, 0, 1, 2, 10, 'A0001')
+ ) A(TransId, StatusIssue, StatusReceipt, Direction, Qty, ItemId)
+GO
+
+--example issued with literals 
+SELECT top 100 ITR.*
+ FROM test.InventTrans ITR
+ WHERE ITR.StatusIssue = 1 
+   AND ITR.Direction = 2
+GO
+
+ --example issued with pseudo-constants
+ SELECT top 100 ITR.*
+ FROM test.InventTrans ITR
+      JOIN test.vLoV_StatusIssue SI
+        ON ITR.StatusIssue = SI.Sold
+      JOIN test.vLoV_InventDirection ID
+        ON ITR.Direction = ID.Issue
+GO
+
+--example receipt with literals 
+ SELECT top 100 ITR.*
+ FROM test.InventTrans ITR
+ WHERE ITR.StatusReceipt= 1
+   AND ITR.Direction = 1
+GO
+
+--example receipt with pseudo-constants
+ SELECT top 100 ITR.*
+ FROM test.InventTrans ITR
+      JOIN test.vLoV_StatusReceipt SR
+        ON ITR.StatusReceipt= SR.Purchased
+      JOIN test.vLoV_InventDirection ID
+        ON ITR.Direction = ID.Receipt
+GO
+
+-- query with commented literals
+SELECT top 100 ITR.*
+FROM test.InventTrans ITR
+WHERE ITR.StatusReceipt <=3 -- Purchased, Received, Registered 
+   AND ITR.Direction = 1-- Receip
+
