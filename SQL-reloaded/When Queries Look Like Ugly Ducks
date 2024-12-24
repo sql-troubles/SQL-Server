@@ -1,0 +1,103 @@
+/*
+SQL Reloaded: When Queries Look Like Ugly Ducks
+https://sql-troubles.blogspot.com/2020/06/sql-unloaded-when-queries-look-like.html
+*/
+
+-- dropping the table
+-- DROP TABLE IF EXISTS dbo.T_Orders 
+
+-- inserting the records 
+SELECT *
+INTO dbo.T_Orders 
+FROM (VALUES ('P0001', 1,'20200618', '100001','S','black',20, 1.23)
+, ('P0001', 1,'20200618', '100001','S','black',20, 1.22)
+, ('P0001', 2,'20200618', '100001','S','black',5, 1.23)
+, ('P0001', 3,'20200618', '100001','M','black',10, 1.24)
+, ('P0002', 1,'20200619', '100001','S','black',5, 1.23)
+, ('P0002', 2,'20200619', '100001','S','black',10, 1.22)) DAT (PurchId, Pos, PurchDate, ItemId, SizeId, ColorId, Qty, Price)
+
+-- adding a primary key
+ALTER TABLE dbo.T_Orders 
+ADD Id int identity(1,1) NOT NULL
+
+-- reviewing the data
+SELECT *
+FROM dbo.T_Orders 
+ORDER BY PurchId
+, Pos
+
+-- simple SELECT DISTINCT 
+SELECT DISTINCT PurchId, Pos, ItemId, SizeId, ColorId, Qty
+FROM dbo.T_Orders
+
+-- simple GROUP BY
+SELECT PurchId, Pos, ItemId, SizeId, ColorId, Qty
+FROM dbo.T_Orders
+GROUP BY PurchId, Pos, ItemId, SizeId, ColorId, Qty
+--HAVING count(*)>1
+
+
+-- nested SELECT DISTINCT
+SELECT DISTINCT PurchId, Pos, ItemId
+FROM (
+ SELECT DISTINCT PurchId, Pos, ItemId, SizeId, ColorId, Qty
+ FROM dbo.T_Orders
+) DAT
+
+
+-- double grouping to remove duplicates
+SELECT PurchId, Pos, ItemId, SizeId, ColorId
+, SUM(Qty) Total
+FROM (--inner query
+ SELECT PurchId, Pos, ItemId, SizeId, ColorId, Qty
+ FROM dbo.T_Orders
+ GROUP BY PurchId, Pos, ItemId, SizeId, ColorId, Qty
+) DAT
+GROUP BY PurchId, Pos, ItemId, SizeId, ColorId
+
+-- removing duplicates via ranking partition window function 
+SELECT *
+FROM (
+ SELECT PurchId, Pos, PurchDate, ItemId, SizeId, ColorId, Qty, Price
+ , RANK() OVER (PARTITION BY PurchId, Pos ORDER BY Id DESC) Ranking 
+ FROM dbo.T_Orders
+) DAT 
+WHERE Ranking=1
+
+
+-- duplicates via grouping in inner query
+SELECT DAT.*
+, DUP.NoRecords 
+FROM dbo.T_Orders DAT
+     JOIN (-- duplicates
+ SELECT PurchId, Pos
+ , count(*) NoRecords
+ FROM dbo.T_Orders DUP
+ GROUP BY PurchId, Pos
+ HAVING count(*)>1 
+  ) DUP 
+   ON DAT.PurchId = DUP.Purchid 
+   AND DAT.Pos = DUP.Pos 
+
+-- duplicates via grouping in correlated query 
+SELECT DAT.*
+, DUP.NoRecords 
+FROM dbo.T_Orders DAT
+     CROSS APPLY (-- duplicates
+ SELECT count(*) NoRecords
+ FROM dbo.T_Orders DUP
+ WHERE DAT.PurchId = DUP.Purchid 
+   AND DAT.Pos = DUP.Pos 
+ GROUP BY PurchId, Pos
+ HAVING count(*)>1 
+  ) DUP 
+
+
+-- duplicates via count within aggregate window function 
+SELECT *
+FROM (
+ SELECT PurchId, Pos, PurchDate, ItemId, SizeId, ColorId, Qty, Price
+ , count(*) OVER (PARTITION BY PurchId, Pos) NoRecords 
+ FROM dbo.T_Orders
+) DAT 
+WHERE NoRecords>1
