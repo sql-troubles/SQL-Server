@@ -1,0 +1,133 @@
+/*
+SQL Reloaded: Deleting Sequential Data From a Table
+https://sql-troubles.blogspot.com/2011/02/deleting-sequential-data-from-table.html
+*/
+
+/* preparing the sournce data */
+
+-- dropping the table 
+-- DROP TABLE dbo.TestTable 
+
+--declaring the table 
+CREATE TABLE test.TestTable ( 
+  id int primary key 
+, value varchar (50))  
+
+-- inserting 1k records in a loop 
+DECLARE @index int  
+SET @index=1  
+SET NOCOUNT ON  
+WHILE (@index<1000)  
+BEGIN 
+    INSERT INTO test.TestTable  
+    VALUES (@index,'test '+cast(@index as varchar(10))) 
+    SET @index=@index+1  
+END 
+
+
+/* deletion via inline code  */
+
+-- delete the top 100 records
+DECLARE @max as int 
+SELECT @max = MAX(ID) 
+FROM( 
+    SELECT top(100) id 
+    FROM test.TestTable  
+    ORDER BY ID 
+) A 
+
+--deleting the data  
+DELETE FROM test.TestTable 
+WHERE id <= @max 
+
+-- review record count
+SELECT count(*) 
+FROM Test.TestTable;
+
+
+/* deletion via UDF */
+
+-- drop the function (cleaning after)
+-- DROP FUNCTION IF EXISTS Test.TestUDF1 
+
+-- creating the UDF function 
+CREATE FUNCTION Test.TestUDF1( 
+  @start int 
+, @end int) 
+RETURNS TABLE 
+AS RETURN ( 
+    SELECT id, value  
+    FROM Test.TestTable  
+    WHERE id BETWEEN @start AND @end 
+)  
+
+--deleting the data 
+ DELETE FROM Test.TestUDF1(201, 250)
+
+-- review record count
+SELECT count(*) 
+FROM Test.TestTable;
+
+-- testing the change
+SELECT id, value  
+FROM Test.TestTable  
+WHERE id BETWEEN 201 AND 250
+
+/* deletion via view  */
+
+-- drop the view (cleaning after)
+--DROP VIEW IF EXISTS Test.vTestView
+
+-- creating the view 
+CREATE VIEW Test.vTestView 
+AS 
+SELECT top(100) id 
+FROM Test.TestTable  
+ORDER BY ID  
+
+--deleting the data 
+DELETE FROM Test.vTestView 
+WHERE ID<200
+
+-- review recrod count
+SELECT count(*) 
+FROM Test.TestTable;
+
+
+/* deletion via UDF  */
+
+-- drop the function (cleaning after)
+-- DROP FUNCTION IF EXISTS Test.TestUDF2
+
+-- creating the UDF function 
+CREATE FUNCTION Test.TestUDF2( 
+@number_records int) 
+RETURNS TABLE 
+AS RETURN ( 
+    SELECT top (@number_records) id, value  
+    FROM Test.TestTable  
+    ORDER BY id 
+)        
+
+--deleting the data 
+DELETE FROM Test.TestUDF2(101)  
+
+-- review recrod count
+SELECT count(*) 
+FROM Test.TestTable;
+
+
+/* deletion via CTE  */
+
+ -- deletion using a CTE 
+;WITH CTE  
+AS ( 
+     SELECT top(100) id 
+     FROM Test.TestTable  
+     ORDER BY ID 
+)  
+DELETE FROM CTE;
+
+-- review record count
+SELECT count(*) 
+FROM Test.TestTable;
