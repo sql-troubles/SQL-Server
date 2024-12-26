@@ -1,0 +1,26 @@
+
+/*
+Description: indexes - pages counts
+Created by: 
+Created: 13.08.2015
+Modified by: A. Nastase
+Modified: 13.08.2015
+Source: https://technet.microsoft.com/en-us/library/dd425070(v=sql.100).aspx
+Notes: 
+*/
+
+
+SELECT OBJECT_NAME(p.object_id) AS object_name
+, i.name AS index_name
+, ps.in_row_used_page_count
+, ps.in_row_data_page_count
+, ps.in_row_reserved_page_count
+, ps.row_count
+, ps.used_page_count
+FROM sys.dm_db_partition_stats ps
+     JOIN sys.partitions p
+       ON ps.partition_id = p.partition_id
+     JOIN sys.indexes i
+       ON p.index_id = i.index_id
+      AND p.object_id = i.object_id
+WHERE p.object_id = object_id('InventTable')
