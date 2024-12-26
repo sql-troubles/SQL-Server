@@ -1,0 +1,20 @@
+/*
+Description: Get Table names, row counts, and compression status for clustered index or heap
+Created by: G. Berry
+Created: ?
+Modified by: A. Nastase
+Modified: 02.08.2010
+Notes: 
+*/
+
+SELECT OBJECT_NAME(object_id) AS [object_name]
+, SUM(Rows) AS row_count
+, data_compression_desc AS [compression_type]
+, COUNT(1) partitions_count
+FROM sys.partitions 
+WHERE index_id < 2 --ignore the partitions from the non-clustered index if any
+  AND OBJECT_NAME(object_id) NOT LIKE 'sys%'
+  AND OBJECT_NAME(object_id) NOT LIKE 'queue_%' 
+  AND OBJECT_NAME(object_id) NOT LIKE 'filestream_tombstone%' 
+GROUP BY object_id, data_compression_desc
+ORDER BY SUM(Rows) DESC;
