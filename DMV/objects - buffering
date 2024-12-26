@@ -1,0 +1,23 @@
+ /*
+Description: Breaks down buffers by object (table, index) in the buffer pool
+Created by: G. Berry
+Created: ?
+Modified by: A. Nastase
+Modified: 04.08.2010
+Source: http://glennberrysqlperformance.spaces.live.com/blog/cns!45041418ECCAA960!4232.entry
+Notes:      
+*/
+ 
+SELECT  p.[object_id]
+, OBJECT_NAME(p.[object_id]) AS [ObjectName]
+, p.index_id
+, COUNT(*)/128.0 AS [Buffer size(MB)]
+, COUNT(1) AS [Buffer_count] 
+FROM sys.allocation_units AS a
+    JOIN sys.dm_os_buffer_descriptors AS b
+      ON a.allocation_unit_id = b.allocation_unit_id
+    JOIN sys.partitions AS p
+      ON a.container_id = p.hobt_id
+WHERE b.database_id = DB_ID()
+GROUP BY p.[object_id], p.index_id
+ORDER BY buffer_count DESC;
