@@ -1,0 +1,63 @@
+/*
+SQL Reloaded: Number of Records III (via sys.partitions)
+https://sql-troubles.blogspot.com/2024/12/sql-reloaded-number-of-records-iii-via.html
+*/
+
+-- number of records via COUNT
+SELECT count(*) row_count
+FROM SalesLT.Product
+
+-- number of records via COUNT for multiple tables
+SELECT 'SalesLT.Product' table_name
+, count(*) row_count
+FROM SalesLT.Product
+UNION ALL
+SELECT 'SalesLT.ProductDescription' table_name
+, count(*) row_count
+FROM SalesLT.ProductDescription
+UNION ALL
+SELECT 'SalesLT.ProductModel' table_name
+, count(*) row_count
+FROM SalesLT.ProductModel
+
+-- number of records via DMV for single object
+SELECT object_id
+, OBJECT_NAME(object_id) object_name
+, OBJECT_SCHEMA_NAME(object_id) schema_name
+, SUM(Rows) AS row_count
+, data_compression_desc AS compression_type
+, COUNT(*) partitions_count
+FROM sys.partitions 
+WHERE index_id < 2 --ignore the partitions from the non-clustered index if any
+  AND OBJECT_ID('SalesLT.Product') = object_id
+GROUP BY object_id
+, data_compression_desc
+ORDER BY row_count DESC;
+
+-- number of records via DMVs
+SELECT S.name + '.' + T.name SearchName
+, S.Name SchemaName
+, T.name TableName
+, P.row_count
+, P.compression_type
+, P.partitions_count
+FROM sys.tables T
+     LEFT JOIN (
+        SELECT object_id
+        , SUM(Rows) AS row_count
+        , data_compression_desc AS compression_type
+        , COUNT(*) partitions_count
+        FROM sys.partitions 
+        WHERE index_id < 2 --ignore the partitions from the non-clustered index if any
+        --AND OBJECT_ID('SalesLT.Product') = object_id
+        GROUP BY object_id
+        , data_compression_desc
+     ) P
+    ON T.object_id = P.object_id
+     JOIN sys.schemas as S
+	   on S.schema_id = T.schema_id
+WHERE S.Name = 'SalesLT'
+  AND T.Name LIKE 'Product%'
+ORDER BY row_count DESC;
+
+
